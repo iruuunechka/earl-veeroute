@@ -3,7 +3,12 @@ package earl
 import io.circe.generic.auto._
 import io.circe.{Decoder, DecodingFailure, HCursor}
 
-case class Individual(id: String, fitness: Seq[Double])
+case class Individual(id: String, fitness: Seq[Double]) {
+  def constructQuery(objectives: Iterable[Int]): String = {
+    require(objectives.forall(idx => idx >= 0 && idx < fitness.size))
+    s"""{"result_id":"$id","target_functions":[${objectives.mkString(",")}]}"""
+  }
+}
 
 object Individual {
   case class FitnessRecord(value: Double, corresponding_function_id: Int)
