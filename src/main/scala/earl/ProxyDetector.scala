@@ -22,7 +22,7 @@ object ProxyDetector {
     Some(new Proxy(Type.HTTP, new InetSocketAddress("rain.ifmo.ru", 3128))),
   )
 
-  def detect: Option[Proxy] = proxyList
+  lazy val theProxy: Option[Proxy] = proxyList
     .filter(checkWhetherProxyWorks)
     .headOption
     .getOrElse(throw new IllegalStateException("No proxy works"))

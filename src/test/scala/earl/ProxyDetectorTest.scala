@@ -6,8 +6,8 @@ import scalaj.http.BaseHttp
 
 class ProxyDetectorTest extends FlatSpec with Matchers {
   "ProxyDetector" should "detect the functioning proxy" in {
-    val proxy = ProxyDetector.detect
+    val proxy = ProxyDetector.theProxy
     val http = new BaseHttp(proxyConfig = proxy)
-    assert(http("https://gentoo.org/").asString.isSuccess)
+    http("https://gentoo.org/").asString.isSuccess shouldBe true
   }
 }
