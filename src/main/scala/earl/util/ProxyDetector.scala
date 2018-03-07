@@ -1,4 +1,4 @@
-package earl
+package earl.util
 
 import java.net.Proxy.Type
 import java.net.{InetSocketAddress, Proxy}

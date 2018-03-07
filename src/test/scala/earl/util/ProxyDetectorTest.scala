@@ -1,4 +1,4 @@
-package earl
+package earl.util
 
 import org.scalatest.{FlatSpec, Matchers}
 
