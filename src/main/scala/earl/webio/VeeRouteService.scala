@@ -3,23 +3,25 @@ package earl.webio
 import earl.Service
 import earl.util.ProxyDetector
 
-import scalaj.http.{BaseHttp, HttpResponse}
 import io.circe.generic.auto._
 import io.circe.parser._
+
+import scalaj.http.{BaseHttp, HttpRequest}
 
 object VeeRouteService extends Service {
   class VeeRouteException(message: String, cause: Throwable) extends RuntimeException {
     def this(message: String) = this(message, null)
   }
 
-  private def checkHttpResult(response: HttpResponse[_]): Unit = {
-    if (!response.isSuccess || response.code != 200) {
-      throw new VeeRouteException(s"Unexpected response from the web server\n$response")
+  private implicit class HttpRequestParser(val request: HttpRequest) extends AnyVal {
+    def decodeOr[T : io.circe.Decoder](onError: String): T = {
+      val response = request.asString
+      if (!response.isSuccess || response.code != 200) {
+        throw new VeeRouteException(s"Unexpected response from the web server\n$response")
+      }
+      val parseResult = decode[T](response.body)
+      parseResult.getOrElse(throw new VeeRouteException(onError, parseResult.left.get))
     }
-  }
-
-  private def rightOrThrow[T](arg: Either[_ <: Throwable, T], text: String): T = {
-    arg.getOrElse(throw new VeeRouteException(text, arg.left.get))
   }
 
   private val http = new BaseHttp(proxyConfig = ProxyDetector.theProxy)
@@ -49,9 +51,12 @@ object VeeRouteService extends Service {
       override def optimize(functions: Function*): Individual = {
         val query = s"""{"result_id":"$id","target_functions":[${functions.map(_.number).mkString(",")}]}"""
 
-        val queryResponse = http(optimizeUrl).header("Content-Type", "application/json").postData(query).timeout(10000, 3600000).asString
-        checkHttpResult(queryResponse)
-        rightOrThrow(decode[OptimizeReply](queryResponse.body), "Could not parse the JSON with the reply to /optimize").result
+        http(optimizeUrl)
+          .header("Content-Type", "application/json")
+          .postData(query)
+          .timeout(10000, 3600000)
+          .decodeOr[OptimizeReply]("Could not parse the JSON with the reply to /optimize")
+          .result
       }
 
       override def toString: String = s"Individual(id = $id, fitness = $fitness)"
@@ -60,10 +65,9 @@ object VeeRouteService extends Service {
     case class DatasetReply(target_functions: Seq[MyFunction], result: MyIndividual)
     case class OptimizeReply(result: MyIndividual)
 
-    private val response = http(datasetUrl + reference.number).timeout(10000, 3600000).asString
-    checkHttpResult(response)
-
-    private val parseResult = rightOrThrow(decode[DatasetReply](response.body), "Could not parse the JSON with dataset description")
+    private val parseResult = http(datasetUrl + reference.number)
+      .timeout(10000, 3600000)
+      .decodeOr[DatasetReply]("Could not parse the JSON with dataset description")
 
     override val individuals = new scala.collection.mutable.ArrayBuffer[MyIndividual]
     override val functions: Seq[Function] = parseResult.target_functions
@@ -73,9 +77,7 @@ object VeeRouteService extends Service {
   }
 
   override val datasets: Seq[DatasetReference] = {
-    val response = http(datasetsUrl).asString
-    checkHttpResult(response)
-    rightOrThrow(decode[Seq[MyDatasetReference]](response.body), "Could not parse the JSON with dataset descriptions")
+    http(datasetsUrl).decodeOr[Seq[MyDatasetReference]]("Could not parse the JSON with dataset descriptions")
   }
 
   override def withDataset[T](dataset: DatasetReference)(function: Dataset => T): T = try {
