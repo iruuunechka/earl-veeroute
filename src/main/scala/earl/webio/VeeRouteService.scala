@@ -51,12 +51,14 @@ object VeeRouteService extends Service {
       override def optimize(functions: Function*): Individual = {
         val query = s"""{"result_id":"$id","target_functions":[${functions.map(_.number).mkString(",")}]}"""
 
-        http(optimizeUrl)
+        val rv = http(optimizeUrl)
           .header("Content-Type", "application/json")
           .postData(query)
           .timeout(10000, 3600000)
           .decodeOr[OptimizeReply]("Could not parse the JSON with the reply to /optimize")
           .result
+        individuals += rv
+        rv
       }
 
       override def toString: String = s"Individual(id = $id, fitness = $fitness)"
@@ -73,7 +75,6 @@ object VeeRouteService extends Service {
     override val functions: Seq[Function] = parseResult.target_functions
     private val id2function = functions.map(f => (f.number, f)).toMap
     individuals += parseResult.result
-
   }
 
   override val datasets: Seq[DatasetReference] = {
