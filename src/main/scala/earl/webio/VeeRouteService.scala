@@ -30,6 +30,9 @@ object VeeRouteService extends Service {
   private val optimizeUrl = "http://itmoearl.veeroute.com/optimize"
   private val cancelUrl   = "http://itmoearl.veeroute.com/cancel"
 
+  private val connectTimeout = 60000
+  private val readTimeout = 3600000
+
   private case class MyDatasetReference(id: Int, version: Int, name: String, description: String) extends DatasetReference {
     override def number: Int = id
   }
@@ -54,7 +57,7 @@ object VeeRouteService extends Service {
         val rv = http(optimizeUrl)
           .header("Content-Type", "application/json")
           .postData(query)
-          .timeout(10000, 3600000)
+          .timeout(connectTimeout, readTimeout)
           .decodeOr[OptimizeReply]("Could not parse the JSON with the reply to /optimize")
           .result
         individuals += rv
@@ -68,7 +71,7 @@ object VeeRouteService extends Service {
     case class OptimizeReply(result: MyIndividual)
 
     private val parseResult = http(datasetUrl + reference.number)
-      .timeout(10000, 3600000)
+      .timeout(connectTimeout, readTimeout)
       .decodeOr[DatasetReply]("Could not parse the JSON with dataset description")
 
     override val individuals = new scala.collection.mutable.ArrayBuffer[MyIndividual]
@@ -78,7 +81,9 @@ object VeeRouteService extends Service {
   }
 
   override val datasets: Seq[DatasetReference] = {
-    http(datasetsUrl).decodeOr[Seq[MyDatasetReference]]("Could not parse the JSON with dataset descriptions")
+    http(datasetsUrl)
+      .timeout(connectTimeout, readTimeout)
+      .decodeOr[Seq[MyDatasetReference]]("Could not parse the JSON with dataset descriptions")
   }
 
   override def withDataset[T](dataset: DatasetReference)(function: Dataset => T): T = try {
