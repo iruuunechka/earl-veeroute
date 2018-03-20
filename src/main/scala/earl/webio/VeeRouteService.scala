@@ -75,7 +75,7 @@ object VeeRouteService extends Service {
       .decodeOr[DatasetReply]("Could not parse the JSON with dataset description")
 
     override val individuals = new scala.collection.mutable.ArrayBuffer[MyIndividual]
-    override val functions: Seq[Function] = parseResult.target_functions
+    override val functions: Seq[Function] = parseResult.target_functions.toIndexedSeq
     private val id2function = functions.map(f => (f.number, f)).toMap
     individuals += parseResult.result
   }
