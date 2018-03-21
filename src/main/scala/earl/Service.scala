@@ -17,6 +17,7 @@ trait Service {
     }
 
     trait Individual {
+      def id: String
       def fitness: Map[Function, Double]
       def optimize(functions: Function*): Individual
     }

@@ -1,5 +1,7 @@
 package earl
 
+import java.io.PrintWriter
+
 import earl.webio.VeeRouteService
 
 import scala.collection.mutable.{ArrayBuffer, HashMap => MuHashMap}
@@ -7,13 +9,21 @@ import scala.collection.mutable.{ArrayBuffer, HashMap => MuHashMap}
 object UCBOptimizer {
   private val tolerance = 1e-4
 
-  def runOnDataset(d: VeeRouteService.Dataset): Unit = {
+  def runOnDataset(summary: PrintWriter, graphs: PrintWriter, budget: Int, run: Int)(d: VeeRouteService.Dataset): Unit = {
     val functions = d.functions
+
+    val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
+    summary.println(heading)
+    graphs.println(heading)
 
     case class IndividualWithRank(individual: d.Individual, var rank: Int)
 
     val remap = new MuHashMap[Map[d.Function, Double], IndividualWithRank]()
     val uniqueSortedIndividuals = new ArrayBuffer[IndividualWithRank]()
+
+    def fitnessToString(fitness: Map[d.Function, Double]): String = {
+      fitness.map(p => (p._1.number, p._2)).toIndexedSeq.sortBy(_._1).mkString("[", ", ", "]")
+    }
 
     def compareFitnessValues(l: Map[d.Function, Double], r: Map[d.Function, Double]): Int = {
       def compareIndex(i: Int): Int = if (i == functions.size) 0 else {
@@ -46,13 +56,13 @@ object UCBOptimizer {
           uniqueSortedIndividuals(index).rank = index
           index -= 1
         }
-        hands ++= functions.map(f => new BanditHand(ind, IndexedSeq(f), iwr))
+        hands ++= functions.map(f => new BanditHand(iwr, IndexedSeq(f), iwr))
       }
       iwr
     }
 
-    class BanditHand(val source: d.Individual, val action: Seq[d.Function], ascendant: IndividualWithRank) {
-      private val children = new ArrayBuffer[IndividualWithRank]()
+    class BanditHand(val source: IndividualWithRank, val action: Seq[d.Function], ascendant: IndividualWithRank) {
+      val children = new ArrayBuffer[IndividualWithRank]()
 
       def estimation(totalCount: Int): Double = {
         if (children.isEmpty) {
@@ -66,8 +76,10 @@ object UCBOptimizer {
       }
 
       def sample(): Seq[BanditHand] = {
-        val newIndividual = rehash(source.optimize(action :_*))
-        println(s"Result: $newIndividual")
+        val newIndividual = rehash(source.individual.optimize(action :_*))
+        println(s"Result ID: ${newIndividual.individual.id}")
+        println(s"Result fitness: ${fitnessToString(newIndividual.individual.fitness)}")
+        println(s"Result rank: ${newIndividual.rank}")
         children += newIndividual
         if (children.size == 1) {
           functions.filterNot(action.contains).map(f => new BanditHand(source, action :+ f, newIndividual))
@@ -76,24 +88,56 @@ object UCBOptimizer {
     }
 
     rehash(d.individuals.head)
+    summary.println(s"1: ${fitnessToString(d.individuals.head.fitness)}")
+    summary.flush()
+
     var totalCount = 1
-    while (true) {
+    while (totalCount < budget) {
+      val prevLast = uniqueSortedIndividuals.last
       val best = hands.maxBy(_.estimation(totalCount))
       println()
-      println(s"Current best fitness: ${uniqueSortedIndividuals.last.individual.fitness}")
+      println(s"Current best fitness: ${fitnessToString(uniqueSortedIndividuals.last.individual.fitness)}")
       println(s"Step $totalCount: Selecting hand {")
-      println(s"  individual: ${best.source}")
+      println(s"  individual ID: ${best.source.individual.id}")
+      println(s"  individual fitness: ${fitnessToString(best.source.individual.fitness)}")
       println(s"  action: ${best.action}")
       println(s"  estimation: ${best.estimation(totalCount)}")
       println("}")
       hands ++= best.sample()
       totalCount += 1
+      if (!(prevLast eq uniqueSortedIndividuals.last)) {
+        summary.println(s"$totalCount: ${fitnessToString(uniqueSortedIndividuals.last.individual.fitness)}")
+        summary.flush()
+      }
     }
+
+    graphs.println(s"${uniqueSortedIndividuals.size} individuals")
+    for (iwr <- uniqueSortedIndividuals) {
+      graphs.println(s"Individual #${iwr.rank}")
+      graphs.println(s"    ID: ${iwr.individual.id}")
+      graphs.println(s"    Fitness: ${fitnessToString(iwr.individual.fitness)}")
+    }
+    graphs.println(s"${hands.size} hands")
+    for (h <- hands) {
+      graphs.println(s"Hand source: ${h.source.rank}")
+      graphs.println(s"     action: ${h.action.mkString(" ")}")
+      graphs.println(s"     children: ${h.children.map(_.rank).mkString(" ")}")
+    }
+    graphs.flush()
   }
 
   def main(args: Array[String]): Unit = {
     val srv = VeeRouteService
-    val idx = args(0).toInt
-    srv.withDataset(srv.datasets(idx))(runOnDataset)
+    val summary = new PrintWriter(args(0))
+    val graphs = new PrintWriter(args(1))
+    val budget = 200
+    try {
+      for (idx <- 0 until 10; run <- 0 until 10) {
+        srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
+      }
+    } finally {
+      summary.close()
+      graphs.close()
+    }
   }
 }
