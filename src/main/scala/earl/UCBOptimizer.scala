@@ -132,8 +132,9 @@ object UCBOptimizer {
     } catch {
       case th: Throwable =>
         // Something is broken
-        summary.println("#Error: iteration is broken, starting over")
-        th.printStackTrace()
+        summary.println("#Error: iteration is broken")
+        th.printStackTrace(summary)
+        summary.println("#Starting over")
         safeWrapper(summary)(fun)
     }
   }
@@ -142,9 +143,9 @@ object UCBOptimizer {
     val srv = VeeRouteService
     val summary = new PrintWriter(args(0))
     val graphs = new PrintWriter(args(1))
-    val budget = 200
+    val budget = 100
     try {
-      for (idx <- 0 until 10; run <- 0 until 10) {
+      for (idx <- 0 until 10; run <- 0 until 5) {
         safeWrapper(summary) {
           srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
         }
