@@ -118,12 +118,24 @@ object UCBOptimizer {
       graphs.println(s"    Fitness: ${fitnessToString(iwr.individual.fitness)}")
     }
     graphs.println(s"${hands.size} hands")
-    for (h <- hands) {
+    for (h <- hands if h.children.nonEmpty) {
       graphs.println(s"Hand source: ${h.source.rank}")
       graphs.println(s"     action: ${h.action.mkString(" ")}")
       graphs.println(s"     children: ${h.children.map(_.rank).mkString(" ")}")
     }
     graphs.flush()
+  }
+
+  final def safeWrapper(summary: PrintWriter)(fun: => Any): Unit = {
+    try {
+      fun
+    } catch {
+      case th: Throwable =>
+        // Something is broken
+        summary.println("#Error: iteration is broken, starting over")
+        th.printStackTrace()
+        safeWrapper(summary)(fun)
+    }
   }
 
   def main(args: Array[String]): Unit = {
@@ -133,7 +145,9 @@ object UCBOptimizer {
     val budget = 200
     try {
       for (idx <- 0 until 10; run <- 0 until 10) {
-        srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
+        safeWrapper(summary) {
+          srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
+        }
       }
     } finally {
       summary.close()
