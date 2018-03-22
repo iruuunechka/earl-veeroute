@@ -117,8 +117,9 @@ object UCBOptimizer {
       graphs.println(s"    ID: ${iwr.individual.id}")
       graphs.println(s"    Fitness: ${fitnessToString(iwr.individual.fitness)}")
     }
-    graphs.println(s"${hands.size} hands")
-    for (h <- hands if h.children.nonEmpty) {
+    val nonEmptyHands = hands.filter(_.children.nonEmpty)
+    graphs.println(s"${nonEmptyHands.size} hands")
+    for (h <- nonEmptyHands) {
       graphs.println(s"Hand source: ${h.source.rank}")
       graphs.println(s"     action: ${h.action.mkString(" ")}")
       graphs.println(s"     children: ${h.children.map(_.rank).mkString(" ")}")
