@@ -67,11 +67,11 @@ object UCBOptimizer {
       def estimation(totalCount: Int): Double = {
         if (children.isEmpty) {
           // never sampled before
-          ascendant.rank + math.sqrt(2 * math.log(totalCount / 0.5))
+          ascendant.rank + math.sqrt(4 * math.log(totalCount))
         } else {
           // evaluate according to the rules
           val expectedRank = children.iterator.map(_.rank.toDouble).sum / children.size
-          expectedRank + math.sqrt(2 * math.log(totalCount / children.size))
+          expectedRank + math.sqrt(2 * math.log(totalCount) / children.size)
         }
       }
 
