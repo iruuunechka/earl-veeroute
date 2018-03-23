@@ -8,6 +8,12 @@ trait Service {
     def description: String
   }
 
+  trait OptimizerReference {
+    def number: Int
+    def name: String
+    def description: String
+  }
+
   trait Dataset {
     trait Function {
       def isPublic: Boolean
@@ -19,7 +25,7 @@ trait Service {
     trait Individual {
       def id: String
       def fitness: Map[Function, Double]
-      def optimize(functions: Function*): Individual
+      def optimize(optimizer: OptimizerReference, functions: Function*): Individual
     }
 
     def reference: DatasetReference
@@ -27,6 +33,7 @@ trait Service {
     def individuals: Seq[Individual]
   }
 
+  def optimizers: Seq[OptimizerReference]
   def datasets: Seq[DatasetReference]
   def withDataset[T](dataset: DatasetReference)(function: Dataset => T): T
 }

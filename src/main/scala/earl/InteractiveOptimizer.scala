@@ -72,7 +72,7 @@ object InteractiveOptimizer {
           println(s"Choose the function(s) to optimize or type 'break'. [0; ${d.functions.size - 1}] available.")
           readOrStop("break", toInts, rangeDistinctValidator(d.functions.indices)) match {
             case Some(functionIndices) =>
-              ind.optimize(functionIndices.map(d.functions) :_*)
+              ind.optimize(VeeRouteService.optimizers.head, functionIndices.map(d.functions) :_*)
               composeOne(true)
             case None =>
               composeOne(false)

@@ -25,15 +25,20 @@ object VeeRouteService extends Service {
   }
 
   private val http = new BaseHttp(proxyConfig = ProxyDetector.theProxy)
-  private val datasetsUrl = "http://itmoearl.veeroute.com/datasets"
-  private val datasetUrl  = "http://itmoearl.veeroute.com/load_dataset/"
-  private val optimizeUrl = "http://itmoearl.veeroute.com/optimize"
-  private val cancelUrl   = "http://itmoearl.veeroute.com/cancel"
+  private val datasetsUrl   = "http://itmoearl.veeroute.com/datasets"
+  private val optimizersUrl = "http://itmoearl.veeroute.com/optimizers"
+  private val datasetUrl    = "http://itmoearl.veeroute.com/load_dataset/"
+  private val optimizeUrl   = "http://itmoearl.veeroute.com/optimize"
+  private val cancelUrl     = "http://itmoearl.veeroute.com/cancel"
 
   private val connectTimeout = 60000
   private val readTimeout = 3600000
 
   private case class MyDatasetReference(id: Int, version: Int, name: String, description: String) extends DatasetReference {
+    override def number: Int = id
+  }
+
+  private case class MyOptimizerReference(id: Int, name: String, description: String) extends OptimizerReference {
     override def number: Int = id
   }
 
@@ -51,8 +56,14 @@ object VeeRouteService extends Service {
     case class MyIndividual(id: String, target_values: Seq[TargetValue]) extends Individual {
       // why lazy: at the moment of creation of the first individual, id2function is not ready.
       override lazy val fitness: Map[Function, Double] = target_values.map(_.toPair).toMap
-      override def optimize(functions: Function*): Individual = {
-        val query = s"""{"result_id":"$id","target_functions":[${functions.map(_.number).mkString(",")}]}"""
+      override def optimize(optimizer: OptimizerReference, functions: Function*): Individual = {
+        val query = s"""{"result_id":"${
+          id
+        }","optimizer_id":${
+          optimizer.number
+        },"target_functions":[${
+          functions.map(_.number).mkString(",")
+        }]}"""
 
         val rv = http(optimizeUrl)
           .header("Content-Type", "application/json")
@@ -80,6 +91,12 @@ object VeeRouteService extends Service {
     individuals += parseResult.result
   }
 
+  override val optimizers: Seq[OptimizerReference] = {
+    http(optimizersUrl)
+      .timeout(connectTimeout, readTimeout)
+      .decodeOr[Seq[MyOptimizerReference]]("Could not parse the JSON with optimizer descriptions")
+  }
+
   override val datasets: Seq[DatasetReference] = {
     http(datasetsUrl)
       .timeout(connectTimeout, readTimeout)
@@ -89,6 +106,6 @@ object VeeRouteService extends Service {
   override def withDataset[T](dataset: DatasetReference)(function: Dataset => T): T = try {
     function(new MyDataset(dataset))
   } finally {
-    http(cancelUrl).asString
+    http(cancelUrl).timeout(connectTimeout, readTimeout).asString
   }
 }

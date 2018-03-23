@@ -10,7 +10,7 @@ object ProxyDetector {
   private def checkWhetherProxyWorks(proxy: Option[Proxy]): Boolean = {
     val http = new BaseHttp(proxyConfig = proxy)
     Try {
-      http("http://example.org/").timeout(1000, 1000).asString
+      http("http://example.org/").timeout(5000, 5000).asString
     } match {
       case Success(response) => response.isSuccess
       case Failure(_) => false

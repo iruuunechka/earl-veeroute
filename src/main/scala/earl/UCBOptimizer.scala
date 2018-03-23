@@ -11,6 +11,7 @@ object UCBOptimizer {
 
   def runOnDataset(summary: PrintWriter, graphs: PrintWriter, budget: Int, run: Int)(d: VeeRouteService.Dataset): Unit = {
     val functions = d.functions
+    val optimizers = VeeRouteService.optimizers
 
     val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
     summary.println(heading)
@@ -56,12 +57,16 @@ object UCBOptimizer {
           uniqueSortedIndividuals(index).rank = index
           index -= 1
         }
-        hands ++= functions.map(f => new BanditHand(iwr, IndexedSeq(f), iwr))
+        hands ++= optimizers.flatMap(o => functions.map(f => new BanditHand(iwr, o, IndexedSeq(f), iwr)))
       }
       iwr
     }
 
-    class BanditHand(val source: IndividualWithRank, val action: Seq[d.Function], ascendant: IndividualWithRank) {
+    class BanditHand(
+      val source: IndividualWithRank,
+      val optimizer: VeeRouteService.OptimizerReference,
+      val action: Seq[d.Function], ascendant: IndividualWithRank
+    ) {
       val children = new ArrayBuffer[IndividualWithRank]()
 
       def estimation(totalCount: Int): Double = {
@@ -76,13 +81,13 @@ object UCBOptimizer {
       }
 
       def sample(): Seq[BanditHand] = {
-        val newIndividual = rehash(source.individual.optimize(action :_*))
+        val newIndividual = rehash(source.individual.optimize(optimizer, action :_*))
         println(s"Result ID: ${newIndividual.individual.id}")
         println(s"Result fitness: ${fitnessToString(newIndividual.individual.fitness)}")
         println(s"Result rank: ${newIndividual.rank}")
         children += newIndividual
         if (children.size == 1) {
-          functions.filterNot(action.contains).map(f => new BanditHand(source, action :+ f, newIndividual))
+          functions.filterNot(action.contains).map(f => new BanditHand(source, optimizer, action :+ f, newIndividual))
         } else Seq.empty
       }
     }
@@ -100,6 +105,7 @@ object UCBOptimizer {
       println(s"Step $totalCount: Selecting hand {")
       println(s"  individual ID: ${best.source.individual.id}")
       println(s"  individual fitness: ${fitnessToString(best.source.individual.fitness)}")
+      println(s"  optimizer: ${best.optimizer.number}")
       println(s"  action: ${best.action}")
       println(s"  estimation: ${best.estimation(totalCount)}")
       println("}")
@@ -121,6 +127,7 @@ object UCBOptimizer {
     graphs.println(s"${nonEmptyHands.size} hands")
     for (h <- nonEmptyHands) {
       graphs.println(s"Hand source: ${h.source.rank}")
+      graphs.println(s"     optimizer: ${h.optimizer.number}")
       graphs.println(s"     action: ${h.action.mkString(" ")}")
       graphs.println(s"     children: ${h.children.map(_.rank).mkString(" ")}")
     }
@@ -146,7 +153,7 @@ object UCBOptimizer {
     val graphs = new PrintWriter(args(1))
     val budget = 100
     try {
-      for (idx <- 0 until 10; run <- 0 until 5) {
+      for (idx <- 0 until 2; run <- 0 until 5) {
         safeWrapper(summary) {
           srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
         }

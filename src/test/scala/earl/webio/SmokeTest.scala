@@ -14,7 +14,7 @@ class SmokeTest extends FlatSpec with Matchers {
       first.fitness.size shouldEqual dataset.functions.size
       println(s"First individual: $first")
 
-      val second = first.optimize(dataset.functions(1), dataset.functions(2))
+      val second = first.optimize(VeeRouteService.optimizers.head, dataset.functions(1), dataset.functions(2))
       second.fitness.size shouldEqual dataset.functions.size
       println(s"Second individual: $second")
     }
