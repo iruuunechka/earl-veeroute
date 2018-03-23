@@ -9,9 +9,10 @@ import scala.collection.mutable.{ArrayBuffer, HashMap => MuHashMap}
 object UCBOptimizer {
   private val tolerance = 1e-4
 
-  def runOnDataset(summary: PrintWriter, graphs: PrintWriter, budget: Int, run: Int)(d: VeeRouteService.Dataset): Unit = {
+  def runOnDataset(summary: PrintWriter, graphs: PrintWriter, budget: Int, run: Int)
+                  (service: Service)(d: service.Dataset): Unit = {
     val functions = d.functions
-    val optimizers = VeeRouteService.optimizers
+    val optimizers = service.optimizers
 
     val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
     summary.println(heading)
@@ -64,7 +65,7 @@ object UCBOptimizer {
 
     class BanditHand(
       val source: IndividualWithRank,
-      val optimizer: VeeRouteService.OptimizerReference,
+      val optimizer: service.OptimizerReference,
       val action: Seq[d.Function], ascendant: IndividualWithRank
     ) {
       val children = new ArrayBuffer[IndividualWithRank]()
@@ -155,7 +156,7 @@ object UCBOptimizer {
     try {
       for (idx <- 0 until 2; run <- 0 until 5) {
         safeWrapper(summary) {
-          srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run))
+          srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run)(srv))
         }
       }
     } finally {
