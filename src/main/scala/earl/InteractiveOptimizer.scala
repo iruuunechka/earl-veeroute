@@ -69,11 +69,17 @@ object InteractiveOptimizer {
           println(s"Chosen individual $id:")
           val ind = d.individuals(id)
           ind.fitness.foreach(p => println(s"    $p"))
-          println(s"Choose the function(s) to optimize or type 'break'. [0; ${d.functions.size - 1}] available.")
-          readOrStop("break", toInts, rangeDistinctValidator(d.functions.indices)) match {
-            case Some(functionIndices) =>
-              ind.optimize(VeeRouteService.optimizers.head, functionIndices.map(d.functions) :_*)
-              composeOne(true)
+          println(s"Choose the optimizer to be used or type 'break'. [0; ${VeeRouteService.optimizers.size - 1}] available.")
+          readOrStop("break", _.toInt, rangeValidator(VeeRouteService.optimizers.indices)) match {
+            case Some(optimizerIndex) =>
+              println(s"Choose the function(s) to optimize or type 'break'. [0; ${d.functions.size - 1}] available.")
+              readOrStop("break", toInts, rangeDistinctValidator(d.functions.indices)) match {
+                case Some(functionIndices) =>
+                  ind.optimize(VeeRouteService.optimizers(optimizerIndex), functionIndices.map(d.functions) :_*)
+                  composeOne(true)
+                case None =>
+                  composeOne(false)
+              }
             case None =>
               composeOne(false)
           }
