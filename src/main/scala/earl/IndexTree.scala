@@ -4,7 +4,7 @@ import java.util.Random
 
 import scala.collection.immutable.VectorBuilder
 
-class IndexTree[T](implicit ordering: Ordering[T]) {
+class IndexTree[T](implicit ordering: Ordering[_ >: T]) {
   private[this] val random = new Random()
   private[this] def nextNonMaximumLong(): Long = {
     val rv = random.nextLong()

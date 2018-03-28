@@ -30,8 +30,12 @@ object MOEARLOptimizer {
     } else dominatesImpl(l, r, i + 1)
   }
 
-  def runOnDataset(summary: PrintWriter, graphs: PrintWriter, budget: Int, run: Int)
+  def runOnDataset(summary: PrintWriter, budget: Int, run: Int)
     (service: Service)(d: service.Dataset): Unit = {
+
+    val refName = d.reference.name
+    assert(refName.endsWith(".json.bz2"))
+    val outputFileName = refName.substring(0, refName.length - ".json.bz2".length) + "_saved_run.json"
 
     val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
     summary.println(heading)
@@ -44,25 +48,30 @@ object MOEARLOptimizer {
     object IndividualCollection {
       import scala.collection.mutable.ArrayBuffer
 
-      private val globalIndexTree = new IndexTree[Individual]() // TODO: from the database. Determines the ranks
+      private implicit val individualOrdering: Ordering[AbstractIndividual] = (l, r) => compareImpl(l.fitness, r.fitness, 0)
+
+      private val globalIndexTree = new IndexTree[AbstractIndividual]() // TODO: from the database. Determines the ranks
       private val localIndexTree = new IndexTree[Individual]()  // For local unification (no need of TreeMap)
       private val ranks = new ArrayBuffer[ArrayBuffer[Individual]]()
 
-      class Individual private[IndividualCollection] (val handle: d.Individual) extends Ordered[Individual] {
-        // this is for comparison and rank determination
-        private[IndividualCollection] val fitness = functions.map(handle.fitness)
-        // this is for NSGA-II
-        private[IndividualCollection] val publicObjectives = publicFunctions.map(handle.fitness)
+      abstract class AbstractIndividual {
+        private[IndividualCollection] def fitness: Seq[Double]
+        private[IndividualCollection] def publicObjectives: Seq[Double]
 
-        def nObjectives: Int = publicFunctions.size + 1
+        def nObjectives: Int = publicObjectives.size + 1
         def objective(index: Int): Double = if (index == 0) globalIndexTree.indexOf(this) else publicObjectives(index - 1)
+      }
+
+      class Individual private[IndividualCollection] (val handle: d.Individual) extends AbstractIndividual {
+        // this is for comparison and rank determination
+        private[IndividualCollection] override val fitness = functions.map(handle.fitness)
+        // this is for NSGA-II
+        private[IndividualCollection] override val publicObjectives = publicFunctions.map(handle.fitness)
 
         private[IndividualCollection] var rank: Int = 0
         private[IndividualCollection] var crowdingDistance: Double = 0
 
         def isDominatedBy(that: Individual): Boolean = dominatesImpl(that.publicObjectives, publicObjectives, 0)
-
-        override def compare(that: Individual): Int = compareImpl(fitness, that.fitness, 0)
       }
 
       def rankStats: String = ranks.zipWithIndex.map(p => (p._2, p._1.size)).mkString(", ")
@@ -131,10 +140,22 @@ object MOEARLOptimizer {
     summary.println(s"1: ${fitnessToString(last.handle.fitness)}")
     summary.flush()
 
+    case class OptimizationAct(
+      source: d.Individual,
+      target: d.Individual,
+      optimizer: Int,
+      firstObjective: Int,
+      time: Long
+    )
+
+    val acts = IndexedSeq.newBuilder[OptimizationAct]
+
     for (t <- 2 to budget) {
       val curr = IndividualCollection.choose().handle
-      val optimizer = service.optimizers(random.nextInt(service.optimizers.size))
-      val firstFunction = functions(random.nextInt(functions.size))
+      val optimizerIndex = random.nextInt(service.optimizers.size)
+      val optimizer = service.optimizers(optimizerIndex)
+      val firstFunctionIndex = random.nextInt(functions.size)
+      val firstFunction = functions(firstFunctionIndex)
       val action = firstFunction +: functions.filter(_ != firstFunction)
       println()
       println(s"Step $t:")
@@ -142,7 +163,13 @@ object MOEARLOptimizer {
       println(s"      Fitness ${fitnessToString(curr.fitness)}")
       println(s"  By optimizer ${optimizer.number} (${optimizer.name})")
       println(s"  Using functions ${action.mkString(", ")}")
+
+      val startTime = System.currentTimeMillis()
       val next = curr.optimize(optimizer, action :_*)
+      val optimizationTime = System.currentTimeMillis() - startTime
+
+      acts += OptimizationAct(curr, next, optimizerIndex, firstFunctionIndex, optimizationTime)
+
       println("Result:")
       println(s"  ${next.id}")
       println(s"      Fitness ${fitnessToString(next.fitness)}")
@@ -155,37 +182,39 @@ object MOEARLOptimizer {
       }
       println(s"Rank stats: ${IndividualCollection.rankStats}")
     }
-  }
 
+    val problemName = d.reference.name
+    val functionNames = functions.map(_.name)
+    val optimizerNames = service.optimizers.map(_.name)
+    val individualMap = d.individuals.zipWithIndex.toMap
+    val mappedActs = acts.result().map(a => RunDatabase.OptimizationAct(
+      source = individualMap(a.source),
+      target = individualMap(a.target),
+      optimizer = a.optimizer,
+      firstObjective = a.firstObjective,
+      time = a.time
+    ))
 
-  final def safeWrapper(summary: PrintWriter)(fun: => Any): Unit = {
-    try {
-      fun
-    } catch {
-      case th: Throwable =>
-        // Something is broken
-        summary.println("#Error: iteration is broken")
-        th.printStackTrace(summary)
-        th.printStackTrace()
-        summary.println("#Starting over")
-        safeWrapper(summary)(fun)
-    }
+    val outputDatabase = RunDatabase(
+      problemName = problemName,
+      objectives = functionNames,
+      optimizers = optimizerNames,
+      individuals = d.individuals.map(i => functions.map(i.fitness)),
+      acts = mappedActs
+    )
+    outputDatabase.saveTo(outputFileName)
   }
 
   def main(args: Array[String]): Unit = {
     val srv = VeeRouteService
     val summary = new PrintWriter(args(0))
-    val graphs = new PrintWriter(args(1))
-    val budget = 100
+    val budget = 20
     try {
-      for (idx <- 0 until 1; run <- 0 until 2) {
-        safeWrapper(summary) {
-          srv.withDataset(srv.datasets(idx))(runOnDataset(summary, graphs, budget, run)(srv))
-        }
+      for (idx <- 0 to 8; run <- 0 until 1) {
+        srv.withDataset(srv.datasets(idx))(runOnDataset(summary, budget, run)(srv))
       }
     } finally {
       summary.close()
-      graphs.close()
     }
   }
 }
