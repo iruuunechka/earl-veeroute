@@ -42,58 +42,47 @@ object MOEARLOptimizer {
     val random = ThreadLocalRandom.current()
 
     object IndividualCollection {
-      import scala.collection.mutable.{TreeMap => MuTreeMap, ArrayBuffer, ArraySeq => MuArraySeq}
+      import scala.collection.mutable.ArrayBuffer
 
-      private val uniqueMap = new MuTreeMap[Individual, Individual]
-      private val orderedIndividuals = new ArrayBuffer[Individual]()
+      private val globalIndexTree = new IndexTree[Individual]() // TODO: from the database. Determines the ranks
+      private val localIndexTree = new IndexTree[Individual]()  // For local unification (no need of TreeMap)
       private val ranks = new ArrayBuffer[ArrayBuffer[Individual]]()
 
       class Individual private[IndividualCollection] (val handle: d.Individual) extends Ordered[Individual] {
-        private[this] val actualObjectives = new MuArraySeq[Double](handle.fitness.size + 1)
-        private[IndividualCollection] val fitness: Seq[Double] = functions.map(handle.fitness)
+        // this is for comparison and rank determination
+        private[IndividualCollection] val fitness = functions.map(handle.fitness)
+        // this is for NSGA-II
         private[IndividualCollection] val publicObjectives = publicFunctions.map(handle.fitness)
-        def objectives: Seq[Double] = actualObjectives
+
+        def nObjectives: Int = publicFunctions.size + 1
+        def objective(index: Int): Double = if (index == 0) globalIndexTree.indexOf(this) else publicObjectives(index - 1)
 
         private[IndividualCollection] var rank: Int = 0
         private[IndividualCollection] var crowdingDistance: Double = 0
 
         def isDominatedBy(that: Individual): Boolean = dominatesImpl(that.publicObjectives, publicObjectives, 0)
 
-        functions.indices.foreach(i => actualObjectives(i + 1) = handle.fitness(functions(i)))
-
-        private[IndividualCollection] def setIndex(index: Int): Unit = actualObjectives(0) = index
         override def compare(that: Individual): Int = compareImpl(fitness, that.fitness, 0)
       }
 
       def rankStats: String = ranks.zipWithIndex.map(p => (p._2, p._1.size)).mkString(", ")
 
-      def last: Individual = orderedIndividuals.last
+      def last: Individual = localIndexTree.last
 
       def consume(handle: d.Individual): Individual = {
         val ind = new Individual(handle)
-        val prev = uniqueMap.getOrElseUpdate(ind, ind)
-        if (ind eq prev) {
-          // Insert the new individual, get the rank
-          var index = orderedIndividuals.size
-          orderedIndividuals += ind
-          while (index > 0 && orderedIndividuals(index - 1).compare(ind) > 0) {
-            orderedIndividuals(index) = orderedIndividuals(index - 1)
-            orderedIndividuals(index).setIndex(index)
-            index -= 1
-          }
-          orderedIndividuals(index) = ind
-          orderedIndividuals(index).setIndex(index)
-
+        globalIndexTree.add(ind)
+        if (localIndexTree.add(ind)) {
           // Reevaluate the NSGA-II ranks
           ranks.foreach(_.clear())
 
           if (ranks.size == 0) {
             ranks += new ArrayBuffer[IndividualCollection.Individual]()
           }
-          index = orderedIndividuals.size - 1
+          var index = localIndexTree.size - 1
           while (index >= 0) {
-            val curr = orderedIndividuals(index)
-            val better = (index + 1 until orderedIndividuals.size).view.map(orderedIndividuals).filter(curr.isDominatedBy).map(_.rank)
+            val curr = localIndexTree.valueAt(index)
+            val better = (index + 1 until localIndexTree.size).view.map(localIndexTree.valueAt).filter(curr.isDominatedBy).map(_.rank)
             curr.rank = if (better.isEmpty) 0 else better.max + 1
             curr.crowdingDistance = 0
             if (ranks.size == curr.rank) {
@@ -104,23 +93,26 @@ object MOEARLOptimizer {
           }
 
           // Reevaluate the NSGA-II crowding distances
-          for (rankSet <- ranks) {
-            for (obj <- orderedIndividuals.head.objectives.indices) {
-              val sorted = rankSet.sortBy(_.objectives(obj))
+          for (rankSet <- ranks if rankSet.nonEmpty) {
+            for (obj <- 0 until localIndexTree.head.nObjectives) {
+              val sorted = rankSet.sortBy(_.objective(obj))
               sorted.head.crowdingDistance = Double.PositiveInfinity
               sorted.last.crowdingDistance = Double.PositiveInfinity
-              val delta = sorted.last.objectives(obj) - sorted.head.objectives(obj)
+              val delta = sorted.last.objective(obj) - sorted.head.objective(obj)
               for (i <- 1 until sorted.size - 1) {
-                sorted(i).crowdingDistance += (sorted(i + 1).objectives(obj) - sorted(i - 1).objectives(obj)) / delta
+                sorted(i).crowdingDistance += (sorted(i + 1).objective(obj) - sorted(i - 1).objective(obj)) / delta
               }
             }
           }
         }
-        prev
+        globalIndexTree.validate()
+        localIndexTree.validate()
+
+        localIndexTree.sameAs(ind)
       }
 
       def choose(): Individual = {
-        val a, b = orderedIndividuals(random.nextInt(orderedIndividuals.size))
+        val a, b = localIndexTree.valueAt(random.nextInt(localIndexTree.size))
         if (a.rank != b.rank) {
           if (a.rank < b.rank) a else b
         } else if (a.crowdingDistance != b.crowdingDistance) {
@@ -174,6 +166,7 @@ object MOEARLOptimizer {
         // Something is broken
         summary.println("#Error: iteration is broken")
         th.printStackTrace(summary)
+        th.printStackTrace()
         summary.println("#Starting over")
         safeWrapper(summary)(fun)
     }
