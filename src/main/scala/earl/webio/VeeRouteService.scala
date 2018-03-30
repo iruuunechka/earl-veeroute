@@ -9,7 +9,7 @@ import io.circe.parser._
 import scalaj.http.{BaseHttp, HttpRequest}
 
 object VeeRouteService extends Service {
-  class VeeRouteException(message: String, cause: Throwable) extends RuntimeException {
+  class VeeRouteException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
     def this(message: String) = this(message, null)
   }
 
