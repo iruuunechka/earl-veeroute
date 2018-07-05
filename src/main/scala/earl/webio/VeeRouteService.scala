@@ -31,8 +31,7 @@ object VeeRouteService extends Service {
   private val optimizeUrl   = "http://itmoearl.veeroute.com/optimize"
   private val cancelUrl     = "http://itmoearl.veeroute.com/cancel"
 
-  private val connectTimeout = 60000
-  private val readTimeout = 3600000
+  private def openURL(url: String): HttpRequest = http(url).timeout(connTimeoutMs = 60000, readTimeoutMs = 3600000)
 
   private case class MyDatasetReference(id: Int, version: Int, name: String, description: String) extends DatasetReference {
     override def number: Int = id
@@ -65,10 +64,9 @@ object VeeRouteService extends Service {
           functions.map(_.number).mkString(",")
         }]}"""
 
-        val rv = http(optimizeUrl)
+        val rv = openURL(optimizeUrl)
           .header("Content-Type", "application/json")
           .postData(query)
-          .timeout(connectTimeout, readTimeout)
           .decodeOr[OptimizeReply]("Could not parse the JSON with the reply to /optimize")
           .result
         individuals += rv
@@ -81,8 +79,7 @@ object VeeRouteService extends Service {
     case class DatasetReply(target_functions: Seq[MyFunction], result: MyIndividual)
     case class OptimizeReply(result: MyIndividual)
 
-    private val parseResult = http(datasetUrl + reference.number)
-      .timeout(connectTimeout, readTimeout)
+    private val parseResult = openURL(datasetUrl + reference.number)
       .decodeOr[DatasetReply]("Could not parse the JSON with dataset description")
 
     override val individuals = new scala.collection.mutable.ArrayBuffer[MyIndividual]
@@ -91,21 +88,15 @@ object VeeRouteService extends Service {
     individuals += parseResult.result
   }
 
-  override val optimizers: Seq[OptimizerReference] = {
-    http(optimizersUrl)
-      .timeout(connectTimeout, readTimeout)
+  override val optimizers: Seq[OptimizerReference] = openURL(optimizersUrl)
       .decodeOr[Seq[MyOptimizerReference]]("Could not parse the JSON with optimizer descriptions")
-  }
 
-  override val datasets: Seq[DatasetReference] = {
-    http(datasetsUrl)
-      .timeout(connectTimeout, readTimeout)
+  override val datasets: Seq[DatasetReference] = openURL(datasetsUrl)
       .decodeOr[Seq[MyDatasetReference]]("Could not parse the JSON with dataset descriptions")
-  }
 
   override def withDataset[T](dataset: DatasetReference)(function: Dataset => T): T = try {
     function(new MyDataset(dataset))
   } finally {
-    http(cancelUrl).timeout(connectTimeout, readTimeout).asString
+    openURL(cancelUrl).asString
   }
 }
