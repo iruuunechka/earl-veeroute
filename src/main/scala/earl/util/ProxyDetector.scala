@@ -23,7 +23,6 @@ object ProxyDetector {
   )
 
   lazy val theProxy: Option[Proxy] = proxyList
-    .filter(checkWhetherProxyWorks)
-    .headOption
+    .find(checkWhetherProxyWorks)
     .getOrElse(throw new IllegalStateException("No proxy works"))
 }

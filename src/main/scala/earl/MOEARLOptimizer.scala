@@ -69,13 +69,13 @@ object MOEARLOptimizer {
     }
 
     def clear(): Unit = {
-      import java.util.Arrays
-      Arrays.fill(countOfFirst, 0)
-      Arrays.fill(countOfSecond, 0)
-      Arrays.fill(sumOfFirst, 0.0)
-      Arrays.fill(sumOfSecond, 0.0)
+      import java.util.Arrays.fill
+      fill(countOfFirst, 0)
+      fill(countOfSecond, 0)
+      fill(sumOfFirst, 0.0)
+      fill(sumOfSecond, 0.0)
       for (c <- cells) {
-        Arrays.fill(c, Double.NaN)
+        fill(c, Double.NaN)
       }
     }
   }
@@ -171,7 +171,7 @@ object MOEARLOptimizer {
           // Reevaluate the NSGA-II ranks
           ranks.foreach(_.clear())
 
-          if (ranks.size == 0) {
+          if (ranks.isEmpty) {
             ranks += new ArrayBuffer[IndividualCollection.Individual]()
           }
           var index = indexTree.size - 1
@@ -237,7 +237,7 @@ object MOEARLOptimizer {
           .map(p => (p._1, p._2, globalQ(p._1, p._2) * globalMultiple + localQ(p._1, p._2)))
           .filter(_._3 > 0)
 
-      val (optimizerIndex, firstFunctionIndex) = if (candidatesWithWeights.size == 0 || random.nextInt(10) == 0) {
+      val (optimizerIndex, firstFunctionIndex) = if (candidatesWithWeights.isEmpty || random.nextInt(10) == 0) {
         (random.nextInt(optimizers.size), random.nextInt(functions.size))
       } else {
         var sample = random.nextDouble() * candidatesWithWeights.map(_._3).sum
@@ -302,7 +302,7 @@ object MOEARLOptimizer {
 
   def main(args: Array[String]): Unit = {
     val root = args(0)
-    val databases = new File(root).listFiles(f => f.getName.endsWith(".json")).map(f => RunDatabase.load(f.getCanonicalPath))
+    val databases = new File(root).listFiles(_.getName.endsWith(".json")).map(f => RunDatabase.load(f.getCanonicalPath))
     val srv = VeeRouteService
     val summary = new PrintWriter(args(1))
     val budget = 20

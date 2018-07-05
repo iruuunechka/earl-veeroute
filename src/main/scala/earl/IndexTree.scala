@@ -193,7 +193,7 @@ class IndexTree[T](implicit ordering: Ordering[_ >: T]) {
     for (i <- 1 until result.size) {
       assert(ordering.compare(result(i - 1), result(i)) < 0)
     }
-    for (i <- 0 until result.size) {
+    for (i <- result.indices) {
       assert(ordering.equiv(result(i), valueAt(i)))
       assert(i == indexOf(result(i)))
     }
