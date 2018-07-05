@@ -1,4 +1,4 @@
-val circeVersion = "0.9.1"
+val circeVersion = "0.9.3"
 
 lazy val earlVeeRoute = project
   .in(file("."))
