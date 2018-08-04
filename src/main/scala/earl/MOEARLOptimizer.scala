@@ -36,7 +36,7 @@ object MOEARLOptimizer {
   }
 
   class QMatrix(firstSize: Int, secondSize: Int) {
-    private[this] val cells = Array.fill(firstSize, secondSize)(Double.NaN)
+    private[this] val cells = Array.fill(firstSize, secondSize)(Double.NaN: Double)
     private[this] val countOfFirst = Array.fill(firstSize)(0)
     private[this] val sumOfFirst = Array.fill(firstSize)(0.0)
     private[this] val countOfSecond = Array.fill(secondSize)(0)
