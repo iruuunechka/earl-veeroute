@@ -33,7 +33,7 @@ object MOEARLOptimizer {
   }
 
   private[this] def dateTimeToString(v: LocalDateTime): String = {
-    s"${v.getYear}${v.getMonthValue}${v.getDayOfMonth}-${v.getHour}${v.getMinute}${v.getSecond}"
+    f"_${v.getYear}%04d${v.getMonthValue}%02d${v.getDayOfMonth}%02d-${v.getHour}%02d${v.getMinute}%02d${v.getSecond}%02d"
   }
 
   class QMatrix(firstSize: Int, secondSize: Int) {
