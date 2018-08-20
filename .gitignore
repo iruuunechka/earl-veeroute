@@ -11,3 +11,6 @@ hs_err_pid*
 /project/project/
 /project/target/
 /target/
+
+#Local experiment directories
+/experiments

@@ -1,7 +1,8 @@
 package earl
 
-import java.io.{File, PrintWriter}
+import java.io.{File, FileInputStream, IOException, PrintWriter}
 import java.time.LocalDateTime
+import java.util.Properties
 import java.util.concurrent.ThreadLocalRandom
 
 import earl.webio.VeeRouteService
@@ -80,7 +81,7 @@ object MOEARLOptimizer {
     }
   }
 
-  def runOnDataset(databases: Seq[RunDatabase], resultRoot: String, summary: PrintWriter, budget: Int, run: Int)
+  def runOnDataset(databases: Seq[RunDatabase], resultRoot: File, summary: PrintWriter, budget: Int, run: Int)
     (service: Service)(d: service.Dataset): Unit =
   {
     import scala.collection.mutable.ArrayBuffer
@@ -88,8 +89,8 @@ object MOEARLOptimizer {
     val date = LocalDateTime.now()
     val refName = d.reference.name
     assert(refName.endsWith(".json.bz2"))
-    val outputFileName = resultRoot +
-      "/" + refName.substring(0, refName.length - ".json.bz2".length) + dateTimeToString(date) + ".json"
+    val outputFile = new File(resultRoot,
+      refName.substring(0, refName.length - ".json.bz2".length) + dateTimeToString(date) + ".json")
 
     val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
     summary.println(heading)
@@ -297,17 +298,30 @@ object MOEARLOptimizer {
       individuals = d.individuals.map(i => functions.map(i.fitness)),
       acts = mappedActs
     )
-    outputDatabase.saveTo(outputFileName)
+    outputDatabase.saveTo(outputFile)
   }
 
   def main(args: Array[String]): Unit = {
-    val root = args(0)
-    val databases = new File(root).listFiles(_.getName.endsWith(".json")).map(f => RunDatabase.load(f.getCanonicalPath))
+    val propertyFile = new File(args(0))
+    val propertyParent = propertyFile.getParentFile.getAbsoluteFile
+    val properties = new Properties()
+    val stream = new FileInputStream(propertyFile)
+    properties.load(stream)
+    stream.close()
+
+    val root = new File(propertyParent, properties.getProperty("root.dir"))
+    if (!root.exists() && !root.mkdirs()) {
+      throw new IOException("Cannot create the root directory: '" + root.getAbsolutePath + "'")
+    }
+    val databases = root.listFiles(_.getName.endsWith(".json")).map(f => RunDatabase.load(f.getCanonicalPath))
     val srv = VeeRouteService
-    val summary = new PrintWriter(args(1))
-    val budget = 20
+    val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary.file")))
+    val budget = properties.getProperty("budget").toInt
     try {
-      for (idx <- 0 to 8; run <- 0 until 1) {
+      for {
+        idx <- properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
+        run <- 0 until properties.getProperty("runs").toInt
+      } {
         srv.withDataset(srv.datasets(idx))(runOnDataset(databases, root, summary, budget, run)(srv))
       }
     } finally {

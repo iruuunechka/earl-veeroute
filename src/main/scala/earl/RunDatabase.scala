@@ -1,6 +1,8 @@
 package earl
 
+import java.io.File
 import java.nio.file._
+
 import scala.collection.JavaConverters._
 import io.circe.generic.auto._
 import io.circe.syntax._
@@ -15,6 +17,9 @@ case class RunDatabase(
 ) {
   def saveTo(filename: String): Unit = {
     Files.write(Paths.get(filename), Seq(this.asJson.toString()).asJava)
+  }
+  def saveTo(file: File): Unit = {
+    Files.write(file.toPath, Seq(this.asJson.toString()).asJava)
   }
 }
 
