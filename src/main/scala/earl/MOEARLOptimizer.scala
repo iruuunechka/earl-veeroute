@@ -301,6 +301,11 @@ object MOEARLOptimizer {
     outputDatabase.saveTo(outputFile)
   }
 
+  def loadSource(root: String): Seq[RunDatabase] = {
+    val children = new File(root).listFiles(_.getName.endsWith(".json"))
+    if (children == null) Seq.empty else children.map(f => RunDatabase.load(f.getCanonicalPath))
+  }
+
   def main(args: Array[String]): Unit = {
     val propertyFile = new File(args(0))
     val propertyParent = propertyFile.getParentFile.getAbsoluteFile
@@ -309,20 +314,21 @@ object MOEARLOptimizer {
     properties.load(stream)
     stream.close()
 
-    val root = new File(propertyParent, properties.getProperty("root.dir"))
-    if (!root.exists() && !root.mkdirs()) {
-      throw new IOException("Cannot create the root directory: '" + root.getAbsolutePath + "'")
+    val targetRoot = new File(propertyParent, properties.getProperty("target.root"))
+    if (!targetRoot.exists() && !targetRoot.mkdirs()) {
+      throw new IOException("Cannot create the root directory: '" + targetRoot.getAbsolutePath + "'")
     }
-    val databases = root.listFiles(_.getName.endsWith(".json")).map(f => RunDatabase.load(f.getCanonicalPath))
+    val sourceRootCount = properties.getProperty("source.root.count", "0").toInt
+    val databases = (0 until sourceRootCount).flatMap(i => loadSource(properties.getProperty("source.root." + i)))
     val srv = VeeRouteService
-    val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary.file")))
+    val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary")))
     val budget = properties.getProperty("budget").toInt
     try {
       for {
         idx <- properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
         run <- 0 until properties.getProperty("runs").toInt
       } {
-        srv.withDataset(srv.datasets(idx))(runOnDataset(databases, root, summary, budget, run)(srv))
+        srv.withDataset(srv.datasets(idx))(runOnDataset(databases, targetRoot, summary, budget, run)(srv))
       }
     } finally {
       summary.close()
