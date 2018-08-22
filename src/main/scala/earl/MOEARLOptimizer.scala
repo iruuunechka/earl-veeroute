@@ -34,13 +34,8 @@ object MOEARLOptimizer {
     val publicFunctions = functions.filter(_.isPublic)
     val random = ThreadLocalRandom.current()
 
-    case class OptimizationAct(
-                                source: d.Individual,
-                                target: d.Individual,
-                                optimizer: Int,
-                                firstObjective: Int,
-                                time: Long
-                              )
+    case class OptimizationAct(source: d.Individual, target: d.Individual,
+                               optimizer: Int, firstObjective: Int, time: Long)
 
     val acts = new ArrayBuffer[OptimizationAct]
 
