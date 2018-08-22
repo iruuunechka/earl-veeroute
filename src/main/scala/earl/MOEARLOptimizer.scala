@@ -5,84 +5,17 @@ import java.time.LocalDateTime
 import java.util.Properties
 import java.util.concurrent.ThreadLocalRandom
 
+import earl.reinforce.QMatrix
+import earl.util.Relations._
 import earl.webio.VeeRouteService
 
-import scala.annotation.tailrec
-
 object MOEARLOptimizer {
-  private val tolerance = 1e-4
-
-  @tailrec
-  private def compareImpl(l: Seq[Double], r: Seq[Double], i: Int): Int = {
-    if (i == l.size) {
-      0
-    } else if (l(i) + tolerance < r(i)) {
-      1
-    } else if (l(i) > tolerance + r(i)) {
-      -1
-    } else compareImpl(l, r, i + 1)
-  }
-
-  @tailrec
-  private def dominatesImpl(l: Seq[Double], r: Seq[Double], i: Int): Boolean = {
-    if (i == l.size) {
-      true
-    } else if (l(i) > tolerance + r(i)) {
-      false
-    } else dominatesImpl(l, r, i + 1)
-  }
-
   private[this] def dateTimeToString(v: LocalDateTime): String = {
     f"_${v.getYear}%04d${v.getMonthValue}%02d${v.getDayOfMonth}%02d-${v.getHour}%02d${v.getMinute}%02d${v.getSecond}%02d"
   }
 
-  class QMatrix(firstSize: Int, secondSize: Int) {
-    private[this] val cells = Array.fill(firstSize, secondSize)(Double.NaN: Double)
-    private[this] val countOfFirst = Array.fill(firstSize)(0)
-    private[this] val sumOfFirst = Array.fill(firstSize)(0.0)
-    private[this] val countOfSecond = Array.fill(secondSize)(0)
-    private[this] val sumOfSecond = Array.fill(secondSize)(0.0)
-
-    def += (first: Int, second: Int, reward: Double, prevMultiple: Double): Unit = {
-      if (cells(first)(second).isNaN) {
-        cells(first)(second) = reward
-      } else {
-        cells(first)(second) = prevMultiple * cells(first)(second) + reward
-      }
-      sumOfFirst(first) += reward
-      sumOfSecond(second) += reward
-      countOfFirst(first) += 1
-      countOfSecond(first) += 1
-    }
-
-    def apply(first: Int, second: Int): Double = {
-      if (cells(first)(second).isNaN) {
-        if (countOfFirst(first) != 0 && countOfSecond(second) != 0) {
-          0.5 * (sumOfFirst(first) / countOfFirst(first) + sumOfSecond(second) / countOfSecond(second))
-        } else if (countOfFirst(first) != 0) {
-          sumOfFirst(first) / countOfFirst(first)
-        } else if (countOfSecond(second) != 0) {
-          sumOfSecond(second) / countOfSecond(second)
-        } else 0.0
-      } else {
-        cells(first)(second)
-      }
-    }
-
-    def clear(): Unit = {
-      import java.util.Arrays.fill
-      fill(countOfFirst, 0)
-      fill(countOfSecond, 0)
-      fill(sumOfFirst, 0.0)
-      fill(sumOfSecond, 0.0)
-      for (c <- cells) {
-        fill(c, Double.NaN)
-      }
-    }
-  }
-
   def runOnDataset(databases: Seq[RunDatabase], resultRoot: File, summary: PrintWriter, budget: Int, run: Int)
-    (service: Service)(d: service.Dataset): Unit =
+                  (service: Service)(d: service.Dataset): Unit =
   {
     import scala.collection.mutable.ArrayBuffer
 
@@ -90,7 +23,7 @@ object MOEARLOptimizer {
     val refName = d.reference.name
     assert(refName.endsWith(".json.bz2"))
     val outputFile = new File(resultRoot,
-      refName.substring(0, refName.length - ".json.bz2".length) + dateTimeToString(date) + ".json")
+                              refName.substring(0, refName.length - ".json.bz2".length) + dateTimeToString(date) + ".json")
 
     val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
     summary.println(heading)
@@ -102,12 +35,12 @@ object MOEARLOptimizer {
     val random = ThreadLocalRandom.current()
 
     case class OptimizationAct(
-      source: d.Individual,
-      target: d.Individual,
-      optimizer: Int,
-      firstObjective: Int,
-      time: Long
-    )
+                                source: d.Individual,
+                                target: d.Individual,
+                                optimizer: Int,
+                                firstObjective: Int,
+                                time: Long
+                              )
 
     val acts = new ArrayBuffer[OptimizationAct]
 
@@ -117,7 +50,7 @@ object MOEARLOptimizer {
       val objectiveReindex = db.objectives.map(name => functions.zipWithIndex.find(_._1.name == name).map(_._2).getOrElse(-1))
       val optimizerReindex = db.optimizers.map(name => optimizers.zipWithIndex.find(_._1.name == name).map(_._2).getOrElse(-1))
       val individualsRemap = db.individuals.map(ind => functions.indices.map(i => if (objectiveReindex(i) == -1) 0.0 else ind(objectiveReindex(i))))
-      val indicesSorted = individualsRemap.indices.sortWith((l, r) => compareImpl(individualsRemap(l), individualsRemap(r), 0) < 0)
+      val indicesSorted = individualsRemap.indices.sortWith((l, r) => compareSeq(individualsRemap(l), individualsRemap(r)) < 0)
 
       for (act <- db.acts) {
         val actualObjective = objectiveReindex(act.firstObjective)
@@ -134,7 +67,7 @@ object MOEARLOptimizer {
 
     object IndividualCollection {
 
-      private implicit val individualOrdering: Ordering[Individual] = (l, r) => compareImpl(l.fitness, r.fitness, 0)
+      private implicit val individualOrdering: Ordering[Individual] = (l, r) => compareSeq(l.fitness, r.fitness)
 
       private val indexTree = new IndexTree[Individual]()  // For local unification (no need of TreeMap)
       private val ranks = new ArrayBuffer[ArrayBuffer[Individual]]()
@@ -148,7 +81,7 @@ object MOEARLOptimizer {
         private[IndividualCollection] var rank: Int = 0
         private[IndividualCollection] var crowdingDistance: Double = 0
 
-        def isDominatedBy(that: Individual): Boolean = dominatesImpl(that.publicObjectives, publicObjectives, 0)
+        def isDominatedBy(that: Individual): Boolean = dominates(that.publicObjectives, publicObjectives)
         def nObjectives: Int = publicObjectives.size + 1
         def objective(index: Int): Double = if (index == 0) indexTree.indexOf(this) else publicObjectives(index - 1)
       }
