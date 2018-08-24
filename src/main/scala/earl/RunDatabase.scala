@@ -54,7 +54,7 @@ object RunDatabase {
     override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = FileVisitResult.CONTINUE
 
     override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
-      if (file.endsWith(".json")) {
+      if (file.toString.endsWith(".json")) {
         try {
           databases += load(file)
         } catch {
