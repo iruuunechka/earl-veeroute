@@ -229,11 +229,6 @@ object MOEARLOptimizer {
     outputDatabase.saveTo(outputFile)
   }
 
-  def loadSource(root: String): Seq[RunDatabase] = {
-    val children = new File(root).listFiles(_.getName.endsWith(".json"))
-    if (children == null) Seq.empty else children.map(f => RunDatabase.load(f.getCanonicalPath))
-  }
-
   def main(args: Array[String]): Unit = {
     val propertyFile = new File(args(0))
     val propertyParent = propertyFile.getParentFile.getAbsoluteFile
@@ -247,7 +242,7 @@ object MOEARLOptimizer {
       throw new IOException("Cannot create the root directory: '" + targetRoot.getAbsolutePath + "'")
     }
     val sourceRootCount = properties.getProperty("source.root.count", "0").toInt
-    val databases = (0 until sourceRootCount).flatMap(i => loadSource(properties.getProperty("source.root." + i)))
+    val databases = (0 until sourceRootCount).flatMap(i => RunDatabase.loadAll(properties.getProperty("source.root." + i)))
     val srv = VeeRouteService
     val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary")))
     val budget = properties.getProperty("budget").toInt
