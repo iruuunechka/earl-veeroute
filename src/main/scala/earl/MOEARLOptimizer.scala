@@ -229,8 +229,13 @@ object MOEARLOptimizer {
     val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary")))
     val budget = properties.getProperty("budget").toInt
     try {
+      val indices = if (properties.getProperty("idx.min", "##") != "##") {
+        properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
+      } else {
+        properties.getProperty("idx.list").split(',').map(_.toInt)
+      }
       for {
-        idx <- properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
+        idx <- indices
         run <- 0 until properties.getProperty("runs").toInt
       } {
         srv.withDataset(srv.datasets(idx))(runOnDataset(databases, targetRoot, summary, budget, run)(srv))
