@@ -39,26 +39,8 @@ object MOEARLOptimizer {
 
     val acts = new ArrayBuffer[OptimizationAct]
 
-    val globalQ, localQ = new QMatrix(optimizers.size, functions.size)
-
-    for (db <- databases) {
-      val objectiveReindex = db.objectives.map(name => functions.zipWithIndex.find(_._1.name == name).map(_._2).getOrElse(-1))
-      val optimizerReindex = db.optimizers.map(name => optimizers.zipWithIndex.find(_._1.name == name).map(_._2).getOrElse(-1))
-      val individualsRemap = db.individuals.map(ind => functions.indices.map(i => if (objectiveReindex(i) == -1) 0.0 else ind(objectiveReindex(i))))
-      val indicesSorted = individualsRemap.indices.sortWith((l, r) => compareSeq(individualsRemap(l), individualsRemap(r)) < 0)
-
-      for (act <- db.acts) {
-        val actualObjective = objectiveReindex(act.firstObjective)
-        val actualOptimizer = optimizerReindex(act.optimizer)
-        val actualSource = indicesSorted.indexOf(act.source)
-        val actualTarget = indicesSorted.indexOf(act.target)
-        if (actualSource < 0 || actualTarget < 0) {
-          println(s"$actualSource, $actualTarget")
-          throw new AssertionError()
-        }
-        globalQ += (actualOptimizer, actualObjective, actualTarget - actualSource, 1)
-      }
-    }
+    val localQ = new QMatrix(optimizers.size, functions.size)
+    val globalQ = QMatrix.fromDatabases(databases, functions.map(_.name), optimizers.map(_.name))
 
     object IndividualCollection {
 

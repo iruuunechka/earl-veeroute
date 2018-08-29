@@ -1,6 +1,9 @@
 package earl.reinforce
 
-class QMatrix(firstSize: Int, secondSize: Int) {
+import earl.RunDatabase
+import earl.util.Relations.compareSeq
+
+class QMatrix(val firstSize: Int, val secondSize: Int) {
   private[this] val cells = Array.fill(firstSize, secondSize)(Double.NaN: Double)
   private[this] val countOfFirst = Array.fill(firstSize)(0)
   private[this] val sumOfFirst = Array.fill(firstSize)(0.0)
@@ -42,5 +45,26 @@ class QMatrix(firstSize: Int, secondSize: Int) {
     for (c <- cells) {
       fill(c, Double.NaN)
     }
+  }
+}
+
+object QMatrix {
+  def fromDatabases(databases: Seq[RunDatabase], functionNames: Seq[String], optimizerNames: Seq[String]): QMatrix = {
+    val q = new QMatrix(optimizerNames.size, functionNames.size)
+    for (db <- databases) {
+      val objectiveReindex = db.objectives.map(name => functionNames.zipWithIndex.find(_._1 == name).map(_._2).getOrElse(-1))
+      val optimizerReindex = db.optimizers.map(name => optimizerNames.zipWithIndex.find(_._1 == name).map(_._2).getOrElse(-1))
+      val individualsRemap = db.individuals.map(ind => functionNames.indices.map(i => if (objectiveReindex(i) == -1) 0.0 else ind(objectiveReindex(i))))
+      val indicesSorted = individualsRemap.indices.sortWith((l, r) => compareSeq(individualsRemap(l), individualsRemap(r)) < 0)
+
+      for (act <- db.acts) {
+        val actualObjective = objectiveReindex(act.firstObjective)
+        val actualOptimizer = optimizerReindex(act.optimizer)
+        val actualSource = indicesSorted.indexOf(act.source)
+        val actualTarget = indicesSorted.indexOf(act.target)
+        q += (actualOptimizer, actualObjective, actualTarget - actualSource, 1)
+      }
+    }
+    q
   }
 }
