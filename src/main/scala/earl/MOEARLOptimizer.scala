@@ -232,7 +232,7 @@ object MOEARLOptimizer {
       val indices = if (properties.getProperty("idx.min", "##") != "##") {
         properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
       } else {
-        properties.getProperty("idx.list").split(',').map(_.toInt)
+        properties.getProperty("idx.list").split(',').map(_.toInt).toIndexedSeq
       }
       for {
         idx <- indices
