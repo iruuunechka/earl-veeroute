@@ -49,7 +49,9 @@ class QMatrix(val firstSize: Int, val secondSize: Int) {
 }
 
 object QMatrix {
-  def fromDatabases(databases: Seq[RunDatabase], functionNames: Seq[String], optimizerNames: Seq[String]): QMatrix = {
+  def fromDatabases(databases: Seq[RunDatabase],
+                    functionNames: Seq[String], optimizerNames: Seq[String],
+                    rewardFunction: (Int, Int) => Double): QMatrix = {
     val q = new QMatrix(optimizerNames.size, functionNames.size)
     for (db <- databases) {
       val objectiveReindex = db.objectives.map(name => functionNames.zipWithIndex.find(_._1 == name).map(_._2).getOrElse(-1))
@@ -62,7 +64,7 @@ object QMatrix {
         val actualOptimizer = optimizerReindex(act.optimizer)
         val actualSource = indicesSorted.indexOf(act.source)
         val actualTarget = indicesSorted.indexOf(act.target)
-        q += (actualOptimizer, actualObjective, actualTarget - actualSource, 1)
+        q += (actualOptimizer, actualObjective, rewardFunction(actualSource, actualTarget), 1)
       }
     }
     q

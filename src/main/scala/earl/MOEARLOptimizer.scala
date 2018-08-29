@@ -40,7 +40,7 @@ object MOEARLOptimizer {
     val acts = new ArrayBuffer[OptimizationAct]
 
     val localQ = new QMatrix(optimizers.size, functions.size)
-    val globalQ = QMatrix.fromDatabases(databases, functions.map(_.name), optimizers.map(_.name))
+    val globalQ = QMatrix.fromDatabases(databases, functions.map(_.name), optimizers.map(_.name), (s, t) => t - s)
 
     object IndividualCollection {
 
