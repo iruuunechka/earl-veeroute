@@ -15,24 +15,13 @@ object VeeRouteService extends Service {
 
   private implicit class HttpRequestParser(val request: HttpRequest) extends AnyVal {
     def decodeOr[T : io.circe.Decoder](onError: String): T = {
-      def go(moreAttempts: Int, delayMilliseconds: Int): T = {
-        val response = request.asString
-        if (!response.isSuccess || response.code != 200) {
-          if (moreAttempts == 0) {
-            throw new VeeRouteException(s"Unexpected response from the web server\n$response")
-          } else {
-            println(s"Warning: response.code = ${response.code}, will try ${moreAttempts - 1} more times.")
-            print(s"   Waiting for $delayMilliseconds ms...")
-            Thread.sleep(delayMilliseconds)
-            println(" it's time for the next attempt!")
-            go(moreAttempts - 1, delayMilliseconds * 2)
-          }
-        } else {
-          val parseResult = decode[T](response.body)
-          parseResult.getOrElse(throw new VeeRouteException(onError, parseResult.left.get))
-        }
+      val response = request.asString
+      if (!response.isSuccess || response.code != 200) {
+        throw new VeeRouteException(s"Unexpected response from the web server\n$response")
+      } else {
+        val parseResult = decode[T](response.body)
+        parseResult.getOrElse(throw new VeeRouteException(onError, parseResult.left.get))
       }
-      go(5, 60000)
     }
   }
 

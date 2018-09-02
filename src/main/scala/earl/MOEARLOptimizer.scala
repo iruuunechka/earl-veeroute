@@ -5,6 +5,8 @@ import java.time.LocalDateTime
 import java.util.Properties
 import java.util.concurrent.ThreadLocalRandom
 
+import scala.collection.mutable.{HashMap => MuHashMap}
+
 import earl.reinforce.QMatrix
 import earl.util.Relations._
 import earl.webio.VeeRouteService
@@ -14,20 +16,37 @@ object MOEARLOptimizer {
     f"_${v.getYear}%04d${v.getMonthValue}%02d${v.getDayOfMonth}%02d-${v.getHour}%02d${v.getMinute}%02d${v.getSecond}%02d"
   }
 
+  def runOnDataset(databases: Seq[RunDatabase], resultRoot: File, summary: PrintWriter, budget: Int, run: Int, existingRunCounts: MuHashMap[String, Int])
+                  (service: Service)(d: service.Dataset): Unit = {
+    val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
+    summary.println(heading)
+    summary.flush()
+
+    val refName = d.reference.name
+    assert(refName.endsWith(".json.bz2"))
+
+    if (existingRunCounts.contains(refName)) {
+      val count = existingRunCounts(refName)
+      summary.println(s"  Skipping as there are $count ready runs that were not skipped")
+      if (count == 1) {
+        existingRunCounts.remove(refName)
+      } else {
+        existingRunCounts.update(refName, count - 1)
+      }
+    } else {
+      runOnDataset(databases, resultRoot, summary, budget, run)(service)(d)
+    }
+  }
+
   def runOnDataset(databases: Seq[RunDatabase], resultRoot: File, summary: PrintWriter, budget: Int, run: Int)
                   (service: Service)(d: service.Dataset): Unit =
   {
     import scala.collection.mutable.ArrayBuffer
 
-    val date = LocalDateTime.now()
     val refName = d.reference.name
-    assert(refName.endsWith(".json.bz2"))
+    val date = LocalDateTime.now()
     val outputFile = new File(resultRoot,
                               refName.substring(0, refName.length - ".json.bz2".length) + dateTimeToString(date) + ".json")
-
-    val heading = s"Dataset #${d.reference.number} run #$run: ${d.reference.name}"
-    summary.println(heading)
-    summary.flush()
 
     val optimizers = service.optimizers
     val functions = d.functions
@@ -228,20 +247,33 @@ object MOEARLOptimizer {
     val srv = VeeRouteService
     val summary = new PrintWriter(new File(propertyParent, properties.getProperty("summary")))
     val budget = properties.getProperty("budget").toInt
-    try {
-      val indices = if (properties.getProperty("idx.min", "##") != "##") {
-        properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
-      } else {
-        properties.getProperty("idx.list").split(',').map(_.toInt).toIndexedSeq
+
+    def runUntilReady(): Unit = {
+      try {
+        val indices = if (properties.getProperty("idx.min", "##") != "##") {
+          properties.getProperty("idx.min").toInt to properties.getProperty("idx.max").toInt
+        } else {
+          properties.getProperty("idx.list").split(',').map(_.toInt).toIndexedSeq
+        }
+        val existingRunCounts = new MuHashMap[String, Int]()
+        RunDatabase.loadAll(targetRoot.toPath).groupBy(_.problemName).foreach(p => existingRunCounts.update(p._1, p._2.size))
+        for {
+          idx <- indices
+          run <- 0 until properties.getProperty("runs").toInt
+        } {
+          srv.withDataset(srv.datasets(idx))(runOnDataset(databases, targetRoot, summary, budget, run, existingRunCounts)(srv))
+        }
+      } catch {
+        case e: VeeRouteService.VeeRouteException =>
+          e.printStackTrace()
+          e.printStackTrace(summary)
+          println("Waiting for five minutes...")
+          Thread.sleep(1000 * 60 * 5)
+          runUntilReady()
       }
-      for {
-        idx <- indices
-        run <- 0 until properties.getProperty("runs").toInt
-      } {
-        srv.withDataset(srv.datasets(idx))(runOnDataset(databases, targetRoot, summary, budget, run)(srv))
-      }
-    } finally {
-      summary.close()
     }
+
+    runUntilReady()
+    summary.close()
   }
 }

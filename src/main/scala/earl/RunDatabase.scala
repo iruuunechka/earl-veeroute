@@ -38,11 +38,13 @@ object RunDatabase {
     }
   }
 
-  def loadAll(root: String): Seq[RunDatabase] = {
+  def loadAll(path: Path): Seq[RunDatabase] = {
     val visitor = new DatabaseFileVisitor
-    Files.walkFileTree(Paths.get(root), visitor)
+    Files.walkFileTree(path, visitor)
     visitor.result()
   }
+
+  def loadAll(root: String): Seq[RunDatabase] = loadAll(Paths.get(root))
 
   private[this] class DatabaseFileVisitor extends FileVisitor[Path] {
     private[this] val databases = IndexedSeq.newBuilder[RunDatabase]
