@@ -15,7 +15,7 @@ object EvaluateMatrix {
       case v => throw new IllegalArgumentException("Unknown reward function: " + v)
     }
     val dbs = args.tail.flatMap(RunDatabase.loadAll)
-    println(s"[info] ${dbs.size} databases, ${dbs.iterator.map(_.acts.size).sum} acts in total")
+    println(s"[info] ${dbs.length} databases, ${dbs.iterator.map(_.acts.size).sum} acts in total")
     if (dbs.length > 0) {
       val example = dbs(0)
       val allCells = for (o <- example.optimizers.indices; f <- example.objectives.indices) yield (o, f)
