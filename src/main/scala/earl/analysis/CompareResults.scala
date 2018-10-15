@@ -39,7 +39,7 @@ object CompareResults {
       val right = RunDatabase.loadAll(args(1)).groupBy(_.problemName)
       println(s"Left: ${left.size} databases, right: ${right.size} databases")
       val keys = left.keySet ++ right.keySet
-      for (k <- keys) {
+      for (k <- keys.toIndexedSeq.sorted) {
         val lBest = left(k).map(db => db.individuals.min -> "L")
         val rBest = right(k).map(db => db.individuals.min -> "R")
         val orderOfBestIndividuals = (lBest ++ rBest).sortBy(_._1).map(_._2).mkString("")
